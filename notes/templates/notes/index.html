@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digital Notebook App</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    .navbar {
+      background: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .main {
+      flex-grow: 1;
+      display: flex;
+      height: calc(100vh - 50px);
+    }
+    .sidebar {
+      width: 250px;
+      background: #222;
+      color: #fff;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .sidebar h2 { margin-top: 0; }
+    .notebook, .section, .folder {
+      cursor: pointer;
+      padding: 8px;
+      background: #333;
+      margin: 5px 0;
+      border-radius: 5px;
+    }
+    .app {
+      flex-grow: 1;
+      background: #f4f4f4;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+    }
+    .toolbar {
+      margin-bottom: 10px;
+    }
+    .page-area {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    .page-area textarea {
+      flex-grow: 1;
+      border: none;
+      outline: none;
+      resize: none;
+      font-size: 16px;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      margin-top: 10px;
+    }
+    button {
+      margin: 2px;
+      padding: 6px 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar">Digital Notebook App</div>
+  <div class="main">
+    <div class="sidebar">
+      <h2>Notebooks</h2>
+      <div id="notebooks"></div>
+      <button onclick="addNotebook()">+ Add Notebook</button>
+      <div id="sections"></div>
+      <button onclick="addSection()">+ Add Section</button>
+      <div id="pages"></div>
+      <button onclick="addPage()">+ Add Page</button>
+    </div>
+    <div class="app">
+      <div class="toolbar">
+        <button onclick="exportNotebook()">Export Notebook</button>
+        <button onclick="startVoiceTranscription()">🎤 Voice Transcription</button>
+        <button onclick="shareNotebook()">🤝 Share</button>
+      </div>
+      <div class="page-area">
+        <textarea id="pageContent" placeholder="Write your notes here..."></textarea>
+        <canvas id="sketchCanvas" width="400" height="200"></canvas>
+        <button onclick="clearCanvas()">Clear Sketch</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let notebooks = JSON.parse(localStorage.getItem('notebooks')) || [];
+    let currentNotebook = null;
+    let currentSection = null;
+    let currentPage = null;
+
+    function saveData() {
+      localStorage.setItem('notebooks', JSON.stringify(notebooks));
+    }
+
+    function addNotebook() {
+      const name = prompt('Notebook name:');
+      if(name) {
+        const nb = { id: Date.now(), name, sections: [] };
+        notebooks.push(nb);
+        saveData();
+        renderNotebooks();
+      }
+    }
+
+    function addSection() {
+      if(!currentNotebook) return alert('Select a notebook first.');
+      const name = prompt('Section name:');
+      if(name) {
+        const section = { id: Date.now(), name, pages: [] };
+        currentNotebook.sections.push(section);
+        saveData();
+        renderSections();
+      }
+    }
+
+    function addPage() {
+      if(!currentSection) return alert('Select a section first.');
+      const name = prompt('Page title:');
+      if(name) {
+        const page = { id: Date.now(), name, content: '' };
+        currentSection.pages.push(page);
+        saveData();
+        renderPages();
+      }
+    }
+
+    function renderNotebooks() {
+      const div = document.getElementById('notebooks');
+      div.innerHTML = '';
+      notebooks.forEach(nb => {
+        const el = document.createElement('div');
+        el.className = 'notebook';
+        el.textContent = nb.name;
+        el.onclick = () => { currentNotebook = nb; renderSections(); };
+        div.appendChild(el);
+      });
+    }
+
+    function renderSections() {
+      const div = document.getElementById('sections');
+      div.innerHTML = '<h3>Sections</h3>';
+      currentNotebook.sections.forEach(sec => {
+        const el = document.createElement('div');
+        el.className = 'section';
+        el.textContent = sec.name;
+        el.onclick = () => { currentSection = sec; renderPages(); };
+        div.appendChild(el);
+      });
+    }
+
+    function renderPages() {
+      const div = document.getElementById('pages');
+      div.innerHTML = '<h3>Pages</h3>';
+      currentSection.pages.forEach(pg => {
+        const el = document.createElement('div');
+        el.className = 'folder';
+        el.textContent = pg.name;
+        el.onclick = () => { currentPage = pg; loadPage(); };
+        div.appendChild(el);
+      });
+    }
+
+    function loadPage() {
+      document.getElementById('pageContent').value = currentPage.content;
+    }
+
+    document.getElementById('pageContent').addEventListener('input', () => {
+      if(currentPage) {
+        currentPage.content = document.getElementById('pageContent').value;
+        saveData();
+      }
+    });
+
+    // Sketching
+    const canvas = document.getElementById('sketchCanvas');
+    const ctx = canvas.getContext('2d');
+    let drawing = false;
+
+    canvas.addEventListener('mousedown', () => drawing = true);
+    canvas.addEventListener('mouseup', () => drawing = false);
+    canvas.addEventListener('mousemove', draw);
+
+    function draw(e) {
+      if(!drawing) return;
+      ctx.fillStyle = 'black';
+      ctx.beginPath();
+      ctx.arc(e.offsetX, e.offsetY, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Voice Transcription (Web Speech API)
+    function startVoiceTranscription() {
+      if(!('webkitSpeechRecognition' in window)) {
+        return alert('Speech recognition not supported in this browser');
+      }
+      const recognition = new webkitSpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for(let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        document.getElementById('pageContent').value += transcript;
+        if(currentPage) currentPage.content = document.getElementById('pageContent').value;
+        saveData();
+      };
+      recognition.start();
+    }
+
+    // Sharing (placeholder)
+    function shareNotebook() {
+      alert('Collaboration & sharing features coming soon!');
+    }
+
+    function exportNotebook() {
+      const blob = new Blob([JSON.stringify({ notebooks })], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'notebook-backup.json';
+      a.click();
+    }
+
+    renderNotebooks();
+  </script>
+</body>
+</html>
